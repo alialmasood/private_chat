@@ -1,0 +1,2 @@
+-- إضافة عمود صورة المستخدم
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(512);

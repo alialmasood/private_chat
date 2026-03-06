@@ -22,5 +22,134 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
 }
+
+
+/* ========== صفحة الدردشة — نظام ألوان واحترافي ========== */
+.chat-page {
+  font-family: var(--font-chat), "Segoe UI", system-ui, sans-serif;
+  --chat-bg: #ECE5DD;
+  --chat-bg-pattern: rgba(0, 0, 0, 0.03);
+  --header-bg: #F0F2F5;
+  --bubble-sender: #DCF8C6;
+  --bubble-receiver: #FFFFFF;
+  --text-primary: #111B21;
+  --text-time: #667781;
+  --input-bg: #F0F2F5;
+  --icon-muted: #54656F;
+  --accent: #00A884;
+  --date-badge: #E9EDEF;
+  --shadow-bubble: 0 1px 0.5px rgba(0, 0, 0, 0.06);
+  --shadow-header: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.safe-area-inset {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+.chat-page .chat-messages {
+  scroll-behavior: smooth;
+}
+
+/* خلفية المحادثة — هادئة مع نقط خفيفة جدًا */
+.chat-bg-light {
+  background-color: var(--chat-bg);
+  background-image: radial-gradient(circle at center, var(--chat-bg-pattern) 1px, transparent 1px);
+  background-size: 22px 22px;
+  background-position: 0 0;
+}
+
+@keyframes chatBubbleIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.chat-bubble {
+  animation: chatBubbleIn 0.2s ease-out;
+}
+
+/* فقاعة المرسل — أخضر فاتح أنيق + ذيل من أعلى */
+.bubble-sender {
+  position: relative;
+  max-width: 72%;
+  padding: 8px 12px 10px;
+  border-radius: 12px 12px 4px 12px;
+  background-color: var(--bubble-sender);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-bubble);
+}
+.bubble-sender::after {
+  content: "";
+  position: absolute;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 8px solid var(--bubble-sender);
+  right: 8px;
+  top: -6px;
+}
+.bubble-sender-continuation::after {
+  display: none;
+}
+.bubble-sender-continuation {
+  border-top-right-radius: 12px;
+}
+
+/* فقاعة المستقبل — أبيض نظيف + ذيل من أعلى */
+.bubble-receiver {
+  position: relative;
+  max-width: 72%;
+  padding: 8px 12px 10px;
+  border-radius: 12px 12px 12px 4px;
+  background: var(--bubble-receiver);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-bubble);
+}
+.bubble-receiver::after {
+  content: "";
+  position: absolute;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 8px solid var(--bubble-receiver);
+  left: 8px;
+  top: -6px;
+}
+.bubble-receiver-continuation::after {
+  display: none;
+}
+.bubble-receiver-continuation {
+  border-top-left-radius: 12px;
+}
+
+/* قائمة الإيموجي: إزالة المساحة الفارغة عن اليمين — البيكر يملأ حاويتنا ويُحاذى لليمين */
+.emoji-picker-root {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+.emoji-picker-root .emoji-picker-inner {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.emoji-picker-root .emoji-picker-inner > div,
+.emoji-picker-root .emoji-picker-inner em-emoji-picker {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0;
+}
+

@@ -13,6 +13,9 @@
 # testing
 /coverage
 
+# Prisma generated client (run: npx prisma generate)
+/lib/prisma-client/
+
 # next.js
 /.next/
 /out/
@@ -39,3 +42,5 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+/lib/generated/prisma

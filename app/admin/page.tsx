@@ -6,12 +6,6 @@ export default async function AdminPage() {
   const userId = await getCurrentUserId();
   const users = await db.getAllUsers();
 
-  // إذا لم يوجد أي مستخدم، نسمح بالدخول لإنشاء أول مستخدم
-  if (users.length > 0 && !userId) {
-    const { redirect } = await import("next/navigation");
-    redirect("/login");
-  }
-
   const currentUser = userId ? await db.findUserById(userId) : null;
 
   type UserRow = (typeof users)[number];

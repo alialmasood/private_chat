@@ -141,6 +141,7 @@ export function ChatClient({
   const [popoverPosition, setPopoverPosition] = useState({ bottom: 80, left: 16 });
   const [inputAreaTop, setInputAreaTop] = useState<number>(0);
   const [isMobileLayout, setIsMobileLayout] = useState(false);
+  const [keyboardInset, setKeyboardInset] = useState(0);
   const [callOpen, setCallOpen] = useState(false);
   const [callMode, setCallMode] = useState<"audio" | "video">("audio");
   const [callError, setCallError] = useState<string | null>(null);
@@ -214,6 +215,36 @@ export function ChatClient({
     mq.addEventListener("change", update);
     return () => mq.removeEventListener("change", update);
   }, []);
+
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
+    const el = listRef.current;
+    if (el) {
+      el.scrollTo({ top: el.scrollHeight, behavior });
+      atBottomRef.current = true;
+      setHasNewMessages(false);
+    }
+  }, []);
+
+  // تحسين تجربة الكيبورد على الهاتف: رفع آخر الرسائل مع ارتفاع الكيبورد.
+  useEffect(() => {
+    if (!isMobileLayout || typeof window === "undefined") return;
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const update = () => {
+      const inset = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+      setKeyboardInset(inset);
+      if (document.activeElement === inputRef.current) {
+        requestAnimationFrame(() => scrollToBottom("auto"));
+      }
+    };
+    update();
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+    return () => {
+      vv.removeEventListener("resize", update);
+      vv.removeEventListener("scroll", update);
+    };
+  }, [isMobileLayout, scrollToBottom]);
 
   const switchToKeyboard = useCallback(() => {
     setEmojiOpen(false);
@@ -423,15 +454,6 @@ export function ChatClient({
     return () => clearInterval(interval);
   }, [fetchMessages]);
 
-  const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
-    const el = listRef.current;
-    if (el) {
-      el.scrollTo({ top: el.scrollHeight, behavior });
-      atBottomRef.current = true;
-      setHasNewMessages(false);
-    }
-  }, []);
-
   useEffect(() => {
     const prevLen = prevMessagesLengthRef.current;
     prevMessagesLengthRef.current = messages.length;
@@ -484,6 +506,8 @@ export function ChatClient({
     setSendError(null);
     const content = inputValue.trim();
     if (!content || isSending) return;
+    // نحافظ على ظهور الكيبورد بعد الإرسال (سلوك مشابه واتساب).
+    requestAnimationFrame(() => inputRef.current?.focus());
 
     const replyingTo = replyToMessageId;
     setIsSending(true);
@@ -510,6 +534,7 @@ export function ChatClient({
       setReplyToMessageId(replyingTo);
     } finally {
       setIsSending(false);
+      requestAnimationFrame(() => inputRef.current?.focus());
     }
   }
 
@@ -1303,7 +1328,10 @@ export function ChatClient({
       <div
         ref={listRef}
         onScroll={handleMessagesScroll}
-        className="chat-messages chat-bg-light flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 min-h-0"
+        className="chat-messages chat-bg-light flex-1 overflow-y-auto overflow-x-hidden px-4 pt-4 min-h-0"
+        style={{
+          paddingBottom: `${16 + (isMobileLayout ? keyboardInset : 0)}px`,
+        }}
       >
         {filteredMessages.length === 0 ? (
           <div className="flex flex-col items-center justify-center min-h-[280px] text-center px-4">
@@ -1741,6 +1769,7 @@ export function ChatClient({
               ref={inputRef}
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
+              onFocus={() => scrollToBottom("auto")}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && e.ctrlKey) {
                   e.preventDefault();
@@ -1750,7 +1779,6 @@ export function ChatClient({
               name="content"
               placeholder="مراسلة"
               maxLength={2000}
-              disabled={isSending}
               rows={1}
               className="flex-1 min-w-0 min-h-[42px] max-h-32 py-2.5 pl-2 pr-2 bg-transparent text-[#111B21] placeholder:text-[#667781] text-[15px] focus:outline-none rounded-xl resize-none overflow-y-auto leading-[1.4]"
             />
@@ -1816,16 +1844,19 @@ export function ChatClient({
           </div>
 
           {/* 4. زر الإرسال ➤ (يظهر فقط عند وجود نص) */}
-          <div className="flex-shrink-0">
+          <div className="flex-shrink-0 flex items-end pb-0.5">
             {inputValue.trim() ? (
               <button
                 type="submit"
                 disabled={isSending}
-                className="w-10 h-10 rounded-full bg-[#00A884] text-white flex items-center justify-center hover:bg-[#06CF9C] active:scale-95 shadow-sm transition-all disabled:opacity-60 disabled:pointer-events-none"
+                onPointerDown={(e) => e.preventDefault()}
+                onTouchStart={(e) => e.preventDefault()}
+                onMouseDown={(e) => e.preventDefault()}
+                className="w-11 h-11 rounded-full bg-[#00A884] text-white flex items-center justify-center hover:bg-[#06CF9C] active:scale-95 shadow-md transition-all disabled:opacity-60 disabled:pointer-events-none"
                 aria-label="إرسال"
                 title="إرسال"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24">
+                <svg className="w-[22px] h-[22px]" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                 </svg>
               </button>

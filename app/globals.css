@@ -22,12 +22,13 @@
 body {
   background: var(--background);
   color: var(--foreground);
+  font-family: "Arial (Body CS)", Arial, "Segoe UI", Tahoma, sans-serif;
 }
 
 
 /* ========== صفحة الدردشة — نظام ألوان واحترافي ========== */
 .chat-page {
-  font-family: var(--font-chat), "Segoe UI", system-ui, sans-serif;
+  font-family: "Arial (Body CS)", Arial, "Segoe UI", Tahoma, sans-serif;
   --chat-bg: #ECE5DD;
   --chat-bg-pattern: rgba(0, 0, 0, 0.03);
   --header-bg: #F0F2F5;

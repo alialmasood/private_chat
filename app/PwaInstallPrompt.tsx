@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -11,17 +11,44 @@ export default function PwaInstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [visible, setVisible] = useState(false);
   const [mode, setMode] = useState<"prompt" | "ios" | "secure" | "manual">("prompt");
+  const [isStandalone, setIsStandalone] = useState(false);
+  const [suppressed, setSuppressed] = useState(false);
+  const DISMISS_UNTIL_KEY = "pwa_install_dismiss_until";
+  const INSTALLED_KEY = "pwa_installed";
 
-  const isStandalone = useMemo(() => {
-    if (typeof window === "undefined") return false;
-    const isIosStandalone = Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone);
-    const isDisplayStandalone = window.matchMedia?.("(display-mode: standalone)").matches ?? false;
-    return isIosStandalone || isDisplayStandalone;
-  }, []);
+  const dismissPrompt = () => {
+    const dismissUntil = Date.now() + 7 * 24 * 60 * 60 * 1000; // أسبوع
+    localStorage.setItem(DISMISS_UNTIL_KEY, String(dismissUntil));
+    setVisible(false);
+  };
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (isStandalone) return;
+
+    const isIosStandalone = Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone);
+    const isDisplayStandalone = window.matchMedia?.("(display-mode: standalone)").matches ?? false;
+    const standalone = isIosStandalone || isDisplayStandalone;
+    setIsStandalone(standalone);
+
+    const installedBefore = localStorage.getItem(INSTALLED_KEY) === "1";
+    if (standalone) {
+      localStorage.setItem(INSTALLED_KEY, "1");
+      setSuppressed(true);
+      return;
+    }
+    if (installedBefore) {
+      setSuppressed(true);
+      return;
+    }
+
+    // تسجيل Service Worker مطلوب لظهور تثبيت PWA.
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    }
+
+    const now = Date.now();
+    const dismissUntil = Number(localStorage.getItem(DISMISS_UNTIL_KEY) ?? "0");
+    const isDismissed = dismissUntil > now;
 
     const ua = window.navigator.userAgent.toLowerCase();
     const isIos = /iphone|ipad|ipod/.test(ua);
@@ -29,31 +56,20 @@ export default function PwaInstallPrompt() {
     const isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
     const isSecure = window.isSecureContext || isLocalhost;
 
-    // تسجيل Service Worker مطلوب لظهور تثبيت PWA على أغلب المتصفحات.
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js").catch(() => {});
-    }
-
-    // iOS لا يدعم beforeinstallprompt؛ نظهر شرحًا يدويًا.
-    if (isIos) {
-      setMode("ios");
-      setVisible(true);
-    }
-
-    // على الهواتف عبر HTTP (IP محلي) لا يظهر تثبيت PWA؛ نعرض سبب المشكلة.
-    if (!isSecure) {
-      setMode("secure");
-      setVisible(true);
-    }
-
+    let gotInstallEvent = false;
     const onBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
+      gotInstallEvent = true;
       setDeferredPrompt(event as BeforeInstallPromptEvent);
-      setMode("prompt");
-      setVisible(true);
+      if (!isDismissed) {
+        setMode("prompt");
+        setVisible(true);
+      }
     };
 
     const onAppInstalled = () => {
+      localStorage.setItem(INSTALLED_KEY, "1");
+      setSuppressed(true);
       setVisible(false);
       setDeferredPrompt(null);
     };
@@ -61,30 +77,47 @@ export default function PwaInstallPrompt() {
     window.addEventListener("beforeinstallprompt", onBeforeInstallPrompt);
     window.addEventListener("appinstalled", onAppInstalled);
 
-    // Android أحيانًا لا يطلق الحدث مبكرًا؛ نعرض تلميحًا يدويًا بعد ثوانٍ.
-    const manualTimer = window.setTimeout(() => {
-      if (!deferredPrompt && isAndroid && isSecure && !isIos) {
-        setMode("manual");
+    if (!isDismissed) {
+      if (!isSecure) {
+        setMode("secure");
         setVisible(true);
+      } else if (isIos) {
+        setMode("ios");
+        setVisible(true);
+      } else {
+        const manualTimer = window.setTimeout(() => {
+          if (!gotInstallEvent && isAndroid) {
+            setMode("manual");
+            setVisible(true);
+          }
+        }, 2500);
+        return () => {
+          window.clearTimeout(manualTimer);
+          window.removeEventListener("beforeinstallprompt", onBeforeInstallPrompt);
+          window.removeEventListener("appinstalled", onAppInstalled);
+        };
       }
-    }, 2500);
+    }
 
     return () => {
-      window.clearTimeout(manualTimer);
       window.removeEventListener("beforeinstallprompt", onBeforeInstallPrompt);
       window.removeEventListener("appinstalled", onAppInstalled);
     };
-  }, [deferredPrompt, isStandalone]);
+  }, []);
 
   const handleInstall = async () => {
     if (!deferredPrompt) return;
     await deferredPrompt.prompt();
-    await deferredPrompt.userChoice.catch(() => null);
+    const choice = await deferredPrompt.userChoice.catch(() => null);
+    if (choice?.outcome === "accepted") {
+      localStorage.setItem(INSTALLED_KEY, "1");
+      setSuppressed(true);
+    }
     setVisible(false);
     setDeferredPrompt(null);
   };
 
-  if (isStandalone || !visible) return null;
+  if (isStandalone || suppressed || !visible) return null;
 
   return (
     <div className="fixed bottom-3 right-3 left-3 z-[100] sm:left-auto sm:w-[360px] rounded-2xl bg-[#111B21] text-white shadow-2xl border border-white/10 p-3">
@@ -101,7 +134,7 @@ export default function PwaInstallPrompt() {
             </button>
             <button
               type="button"
-              onClick={() => setVisible(false)}
+              onClick={dismissPrompt}
               className="h-10 px-3 rounded-xl bg-white/10 text-white/90 text-[13px] hover:bg-white/15"
             >
               لاحقًا
@@ -115,7 +148,7 @@ export default function PwaInstallPrompt() {
           <p className="text-[13px] text-white/90 mb-2">لتثبيت التطبيق على iPhone: اضغط مشاركة ثم «Add to Home Screen».</p>
           <button
             type="button"
-            onClick={() => setVisible(false)}
+            onClick={dismissPrompt}
             className="h-10 px-3 rounded-xl bg-white/10 text-white/90 text-[13px] hover:bg-white/15"
           >
             فهمت
@@ -128,7 +161,7 @@ export default function PwaInstallPrompt() {
           <p className="text-[13px] text-white/90 mb-2">التثبيت على الهاتف يحتاج رابط آمن HTTPS. افتح الموقع عبر دومين HTTPS بدل عنوان IP المحلي.</p>
           <button
             type="button"
-            onClick={() => setVisible(false)}
+            onClick={dismissPrompt}
             className="h-10 px-3 rounded-xl bg-white/10 text-white/90 text-[13px] hover:bg-white/15"
           >
             موافق
@@ -141,7 +174,7 @@ export default function PwaInstallPrompt() {
           <p className="text-[13px] text-white/90 mb-2">من قائمة المتصفح (⋮) اختر «تثبيت التطبيق» لإضافته للشاشة الرئيسية.</p>
           <button
             type="button"
-            onClick={() => setVisible(false)}
+            onClick={dismissPrompt}
             className="h-10 px-3 rounded-xl bg-white/10 text-white/90 text-[13px] hover:bg-white/15"
           >
             حسنًا

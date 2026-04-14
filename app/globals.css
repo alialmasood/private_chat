@@ -51,6 +51,18 @@ body {
   padding-right: env(safe-area-inset-right);
 }
 
+/* شريط الكتابة في وضع fullscreen: اترك مسافة آمنة فوق أزرار النظام السفلية */
+.chat-input-bar {
+  padding-bottom: calc(env(safe-area-inset-bottom) + 12px);
+  padding-left: calc(env(safe-area-inset-left) + 12px);
+  padding-right: calc(env(safe-area-inset-right) + 12px);
+}
+
+/* لوحة الإيموجي الملتصقة أسفل الشاشة: نفس مبدأ المسافة الآمنة */
+.chat-keyboard-panel {
+  padding-bottom: calc(env(safe-area-inset-bottom) + 8px);
+}
+
 .chat-page .chat-messages {
   scroll-behavior: smooth;
 }

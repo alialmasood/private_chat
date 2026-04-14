@@ -1627,7 +1627,7 @@ export function ChatClient({
       {!selectionMode && isMobileLayout && emojiOpen && (
         <div
           ref={emojiPanelRef}
-          className="flex-shrink-0 w-full bg-[#F0F2F5] border-t border-black/5 safe-area-inset max-h-[45vh] overflow-hidden"
+          className="chat-keyboard-panel flex-shrink-0 w-full bg-[#F0F2F5] border-t border-black/5 max-h-[45vh] overflow-hidden"
         >
           <MediaPickerPopover
             onEmojiSelect={insertEmoji}
@@ -1649,7 +1649,7 @@ export function ChatClient({
 
       {/* شريط الإدخال السفلي — ثابت وأنيق */}
       {!selectionMode && (
-      <div ref={inputAreaRef} className="flex-shrink-0 px-3 py-3 pb-4 pt-2 bg-[#F0F2F5] safe-area-inset border-t border-black/5">
+      <div ref={inputAreaRef} className="chat-input-bar flex-shrink-0 px-3 py-3 pt-2 bg-[#F0F2F5] border-t border-black/5">
         {/* شريط التسجيل الصوتي */}
         {isRecording && (
           <div className="flex items-center justify-between gap-3 mb-3 px-3 py-2.5 rounded-2xl bg-white shadow-sm border border-black/5">

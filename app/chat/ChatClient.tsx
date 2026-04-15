@@ -123,6 +123,7 @@ export function ChatClient({
   const [zoomedImageSrc, setZoomedImageSrc] = useState<string | null>(null);
   const [messageMenuMessageId, setMessageMenuMessageId] = useState<string | null>(null);
   const [deleteSubMenuMessageId, setDeleteSubMenuMessageId] = useState<string | null>(null);
+  const [messageMenuPosition, setMessageMenuPosition] = useState({ top: 0, left: 0 });
   const [reactionBarMessageId, setReactionBarMessageId] = useState<string | null>(null);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(new Set());
@@ -148,13 +149,14 @@ export function ChatClient({
   const [callError, setCallError] = useState<string | null>(null);
   const [incomingCall, setIncomingCall] = useState<IncomingCall>(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [swipePreview, setSwipePreview] = useState<{ messageId: string; dx: number } | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const swipeStartRef = useRef<{ x: number; messageId: string } | null>(null);
+  const swipeStartRef = useRef<{ x: number; y: number; messageId: string } | null>(null);
   const SWIPE_REPLY_THRESHOLD = 56;
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -956,7 +958,26 @@ export function ChatClient({
     URL.revokeObjectURL(url);
   }
 
-  function openMessageMenu(messageId: string) {
+  function openMessageMenu(messageId: string, anchorEl?: HTMLElement | null) {
+    const menuWidth = 240;
+    const sideMargin = 8;
+    const defaultTop = Math.max(8, Math.round(window.innerHeight * 0.28));
+    const defaultLeft = Math.max(
+      sideMargin,
+      Math.min(window.innerWidth - menuWidth - sideMargin, Math.round((window.innerWidth - menuWidth) / 2))
+    );
+
+    if (anchorEl) {
+      const rect = anchorEl.getBoundingClientRect();
+      const preferredLeft = rect.right - menuWidth;
+      const left = Math.max(sideMargin, Math.min(window.innerWidth - menuWidth - sideMargin, preferredLeft));
+      const preferredTop = rect.bottom + 8;
+      const top = Math.max(8, Math.min(window.innerHeight - 320, preferredTop));
+      setMessageMenuPosition({ top, left });
+    } else {
+      setMessageMenuPosition({ top: defaultTop, left: defaultLeft });
+    }
+
     setMessageMenuMessageId(messageId);
     setDeleteSubMenuMessageId(null);
   }
@@ -1422,7 +1443,9 @@ export function ChatClient({
                       if (selectionMode) return;
                       if (m.isDeleted || m.hiddenByMe) return;
                       const x = e.touches[0]?.clientX ?? 0;
-                      swipeStartRef.current = { x, messageId: m.id };
+                      const y = e.touches[0]?.clientY ?? 0;
+                      swipeStartRef.current = { x, y, messageId: m.id };
+                      setSwipePreview({ messageId: m.id, dx: 0 });
                       longPressTimerRef.current = setTimeout(() => handleLongPress(m.id), 500);
                     }}
                     onTouchEnd={(e) => {
@@ -1439,12 +1462,40 @@ export function ChatClient({
                         }
                       }
                       swipeStartRef.current = null;
+                      setSwipePreview((prev) => (prev?.messageId === m.id ? null : prev));
+                    }}
+                    onTouchCancel={() => {
+                      swipeStartRef.current = null;
+                      setSwipePreview((prev) => (prev?.messageId === m.id ? null : prev));
                     }}
                     onTouchMove={(e) => {
+                      const start = swipeStartRef.current;
+                      if (start?.messageId === m.id && e.touches[0]) {
+                        const currentX = e.touches[0].clientX;
+                        const currentY = e.touches[0].clientY;
+                        const deltaX = currentX - start.x;
+                        const deltaY = currentY - start.y;
+                        // إذا السحب أفقي بشكل واضح، حرك البطاقة مع الإصبع.
+                        if (Math.abs(deltaX) > Math.abs(deltaY)) {
+                          e.preventDefault();
+                          const clamped = Math.max(-72, Math.min(72, deltaX));
+                          setSwipePreview({ messageId: m.id, dx: clamped });
+                        }
+                      }
                       if (longPressTimerRef.current) {
                         clearTimeout(longPressTimerRef.current);
                         longPressTimerRef.current = null;
                       }
+                    }}
+                    style={{
+                      transform:
+                        swipePreview?.messageId === m.id
+                          ? `translateX(${swipePreview.dx}px)`
+                          : "translateX(0px)",
+                      transition:
+                        swipePreview?.messageId === m.id
+                          ? "none"
+                          : "transform 180ms ease-out",
                     }}
                   >
                   <div
@@ -1609,7 +1660,7 @@ export function ChatClient({
                     {!selectionMode && !m.isDeleted && !m.hiddenByMe && (
                       <button
                         type="button"
-                        onClick={(e) => { e.stopPropagation(); openMessageMenu(m.id); }}
+                        onClick={(e) => { e.stopPropagation(); openMessageMenu(m.id, e.currentTarget); }}
                         className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-[#54656F] hover:text-[#111B21] hover:bg-[#E9EDEF] opacity-80 sm:opacity-0 sm:group-hover/item:opacity-100 transition-opacity touch-manipulation"
                         aria-label="خيارات الرسالة"
                       >
@@ -1974,7 +2025,7 @@ export function ChatClient({
         const showDeleteForEveryone = isSender; // فقط المرسل يمكنه حذف للجميع (ضمن المدة)
         return (
           <div
-            className="fixed inset-0 z-40 bg-black/50 flex flex-col justify-end"
+            className="fixed inset-0 z-40"
             onClick={closeMessageMenu}
             role="button"
             tabIndex={0}
@@ -1982,7 +2033,8 @@ export function ChatClient({
             aria-label="إغلاق القائمة"
           >
             <div
-              className="bg-white rounded-t-2xl shadow-xl overflow-hidden max-h-[70vh] overflow-y-auto border-t border-black/5"
+              className="absolute w-[240px] rounded-xl bg-white shadow-xl overflow-hidden max-h-[70vh] overflow-y-auto border border-black/5"
+              style={{ top: messageMenuPosition.top, left: messageMenuPosition.left }}
               onClick={(e) => e.stopPropagation()}
             >
               {deleteSubMenuMessageId === messageMenuMessageId ? (

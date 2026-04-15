@@ -160,6 +160,7 @@ export function ChatClient({
   const listRef = useRef<HTMLDivElement>(null);
   const atBottomRef = useRef(true);
   const prevMessagesLengthRef = useRef(0);
+  const recentSendAtRef = useRef(0);
   const optionsRef = useRef<HTMLDivElement>(null);
   const inputAreaRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -216,6 +217,24 @@ export function ChatClient({
     return () => mq.removeEventListener("change", update);
   }, []);
 
+  // تثبيت صفحة الجات نفسها ومنع تمرير المستند عند فتح الكيبورد.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const html = document.documentElement;
+    const body = document.body;
+    const prevHtmlOverflow = html.style.overflow;
+    const prevBodyOverflow = body.style.overflow;
+    const prevBodyOverscrollY = body.style.overscrollBehaviorY;
+    html.style.overflow = "hidden";
+    body.style.overflow = "hidden";
+    body.style.overscrollBehaviorY = "none";
+    return () => {
+      html.style.overflow = prevHtmlOverflow;
+      body.style.overflow = prevBodyOverflow;
+      body.style.overscrollBehaviorY = prevBodyOverscrollY;
+    };
+  }, []);
+
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
     const el = listRef.current;
     if (el) {
@@ -234,6 +253,7 @@ export function ChatClient({
       const inset = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
       setKeyboardInset(inset);
       if (document.activeElement === inputRef.current) {
+        window.scrollTo({ top: 0, left: 0, behavior: "auto" });
         requestAnimationFrame(() => scrollToBottom("auto"));
       }
     };
@@ -460,12 +480,15 @@ export function ChatClient({
     if (messages.length === 0) return;
     if (messages.length > prevLen) {
       if (atBottomRef.current) {
-        scrollToBottom(prevLen === 0 ? "auto" : "smooth");
+        const isInputFocused = document.activeElement === inputRef.current;
+        const justSentFromComposer = Date.now() - recentSendAtRef.current < 1200;
+        const preferAutoOnMobile = isMobileLayout && (isInputFocused || justSentFromComposer);
+        scrollToBottom(prevLen === 0 || preferAutoOnMobile ? "auto" : "smooth");
       } else {
         setHasNewMessages(true);
       }
     }
-  }, [messages.length, scrollToBottom]);
+  }, [messages.length, scrollToBottom, isMobileLayout]);
 
   const handleMessagesScroll = useCallback(() => {
     const el = listRef.current;
@@ -506,6 +529,7 @@ export function ChatClient({
     setSendError(null);
     const content = inputValue.trim();
     if (!content || isSending) return;
+    recentSendAtRef.current = Date.now();
     // نحافظ على ظهور الكيبورد بعد الإرسال (سلوك مشابه واتساب).
     requestAnimationFrame(() => inputRef.current?.focus());
 
@@ -1038,9 +1062,9 @@ export function ChatClient({
   }
 
   return (
-    <div className="flex flex-col h-[100dvh] max-w-[480px] mx-auto overflow-hidden chat-page text-[#111B21] bg-[var(--chat-bg)]">
+    <div className="chat-page text-[#111B21] bg-[var(--chat-bg)] fixed inset-0 w-full overflow-hidden flex flex-col h-[100dvh] md:relative md:inset-auto md:max-w-[480px] md:mx-auto">
       {/* الهيدر — نظيف وثابت */}
-      <header className="flex-shrink-0 flex items-center gap-3 px-4 py-3 min-h-[56px] bg-[#F0F2F5] safe-area-inset z-20" style={{ boxShadow: "var(--shadow-header)" }}>
+      <header className="chat-header-safe sticky top-0 flex-shrink-0 flex items-center gap-3 px-4 py-3 min-h-[56px] bg-[#F0F2F5] z-20" style={{ boxShadow: "var(--shadow-header)" }}>
         {reactionBarMessageId ? (
           <>
             <button
@@ -1769,7 +1793,11 @@ export function ChatClient({
               ref={inputRef}
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              onFocus={() => scrollToBottom("auto")}
+              onFocus={() => {
+                scrollToBottom("auto");
+                // تأكيد بقاء الهيدر ثابتًا وعدم انزلاق الصفحة كاملة لأعلى.
+                window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+              }}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && e.ctrlKey) {
                   e.preventDefault();

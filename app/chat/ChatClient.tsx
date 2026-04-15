@@ -142,6 +142,7 @@ export function ChatClient({
   const [inputAreaTop, setInputAreaTop] = useState<number>(0);
   const [isMobileLayout, setIsMobileLayout] = useState(false);
   const [keyboardInset, setKeyboardInset] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState<number | null>(null);
   const [callOpen, setCallOpen] = useState(false);
   const [callMode, setCallMode] = useState<"audio" | "video">("audio");
   const [callError, setCallError] = useState<string | null>(null);
@@ -252,8 +253,8 @@ export function ChatClient({
     const update = () => {
       const inset = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
       setKeyboardInset(inset);
+      setViewportHeight(Math.round(vv.height));
       if (document.activeElement === inputRef.current) {
-        window.scrollTo({ top: 0, left: 0, behavior: "auto" });
         requestAnimationFrame(() => scrollToBottom("auto"));
       }
     };
@@ -1062,7 +1063,12 @@ export function ChatClient({
   }
 
   return (
-    <div className="chat-page text-[#111B21] bg-[var(--chat-bg)] fixed inset-0 w-full overflow-hidden flex flex-col h-[100dvh] md:relative md:inset-auto md:max-w-[480px] md:mx-auto">
+    <div
+      className="chat-page text-[#111B21] bg-[var(--chat-bg)] fixed inset-0 w-full overflow-hidden flex flex-col h-[100dvh] md:relative md:inset-auto md:max-w-[480px] md:mx-auto"
+      style={{
+        height: isMobileLayout && viewportHeight ? `${viewportHeight}px` : undefined,
+      }}
+    >
       {/* الهيدر — نظيف وثابت */}
       <header className="chat-header-safe sticky top-0 flex-shrink-0 flex items-center gap-3 px-4 py-3 min-h-[56px] bg-[#F0F2F5] z-20" style={{ boxShadow: "var(--shadow-header)" }}>
         {reactionBarMessageId ? (
@@ -1354,7 +1360,8 @@ export function ChatClient({
         onScroll={handleMessagesScroll}
         className="chat-messages chat-bg-light flex-1 overflow-y-auto overflow-x-hidden px-4 pt-4 min-h-0"
         style={{
-          paddingBottom: `${16 + (isMobileLayout ? keyboardInset : 0)}px`,
+          // عند استخدام visualViewport لا نضيف inset إضافي حتى لا تقفز الرسائل لأعلى.
+          paddingBottom: `${16 + (isMobileLayout && !viewportHeight ? keyboardInset : 0)}px`,
         }}
       >
         {filteredMessages.length === 0 ? (
@@ -1673,7 +1680,7 @@ export function ChatClient({
 
       {/* شريط الإدخال السفلي — ثابت وأنيق */}
       {!selectionMode && (
-      <div ref={inputAreaRef} className="chat-input-bar flex-shrink-0 px-3 py-3 pt-2 bg-[#F0F2F5] border-t border-black/5">
+      <div ref={inputAreaRef} className="chat-input-bar sticky bottom-0 z-30 flex-shrink-0 px-3 py-3 pt-2 bg-[#F0F2F5] border-t border-black/5">
         {/* شريط التسجيل الصوتي */}
         {isRecording && (
           <div className="flex items-center justify-between gap-3 mb-3 px-3 py-2.5 rounded-2xl bg-white shadow-sm border border-black/5">
@@ -1795,8 +1802,6 @@ export function ChatClient({
               onChange={(e) => setInputValue(e.target.value)}
               onFocus={() => {
                 scrollToBottom("auto");
-                // تأكيد بقاء الهيدر ثابتًا وعدم انزلاق الصفحة كاملة لأعلى.
-                window.scrollTo({ top: 0, left: 0, behavior: "auto" });
               }}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && e.ctrlKey) {
